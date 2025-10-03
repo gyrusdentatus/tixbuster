@@ -6,57 +6,103 @@ Systematically tests voucher codes against Pretix-based ticket platforms with ra
 
 ## Features
 
-- 🎯 **2,151+ built-in patterns** from common voucher naming conventions
-- 🔒 **Session validation** with control test
-- ⚡ **Rate limiting protection** with adaptive delays and auto-throttling
-- 🔥 **Multi-threading support** (1-10 threads for parallel testing)
-- 🎲 **Random bruteforce** with configurable patterns, prefixes, and charsets
-- 🔍 **Multiple search modes** (priority, full scan, custom wordlist, random)
-- 📊 **Detailed statistics** and result categorization
-- 🛡️ **Cloudflare detection** and handling
-- 🎯 **Auto-exit on success** with epic banner
+- **Built-in pattern wordlists** from common voucher naming conventions
+- **Session validation** with control test
+- **Rate limiting protection** with adaptive delays and auto-throttling
+- **Multi-threading support** (1-10 threads for parallel testing)
+- **Random bruteforce** with configurable patterns, prefixes, and charsets
+- **Multiple search modes** (priority, full scan, custom wordlist, random)
+- **Wordlist generation** from event websites (speakers, talks, sponsors)
+- **Detailed statistics** and result categorization
+- **Cloudflare detection** and handling
+- **Auto-exit on success** with epic banner
 
 ## Quick Start
 
 ```bash
-# 1. Update cookies in src/session.py
-# 2. Validate session
+# 1. Install dependencies
+uv pip install requests python-dotenv
+
+# 2. Copy .env.example to .env and configure your cookies
+cp .env.example .env
+# Edit .env with your browser cookies (see Configuration below)
+
+# 3. Validate session
 python3 main.py validate
 
-# 3. Test priority codes (36 highest probability)
+# 4. Test priority codes
 python3 main.py test --priority
 
-# 4. Test all patterns with multi-threading (~10-20 minutes with 5 threads)
+# 5. Test all patterns with multi-threading (~10-20 minutes with 5 threads)
 python3 main.py test --all --threads 5
 
-# 5. Random bruteforce if you know the pattern
+# 6. Random bruteforce if you know the pattern
 # Example: if voucher is WTFLOL, this should find it
 python3 main.py test --random 50 --random-prefix WTFLO --random-length 1 --random-charset upper --verbose
 ```
 
 ## Installation
 
-No dependencies beyond Python 3.6+ standard library + `requests`:
+Using `uv` (recommended):
 
 ```bash
-pip install requests
-# or
-uv pip install requests
+uv pip install requests python-dotenv
+```
+
+Or using `pip`:
+
+```bash
+pip install requests python-dotenv
 ```
 
 ## Configuration
 
-Edit `src/session.py` to update your session cookies:
+**Prerequisites:** You need a valid browser session with the Pretix instance.
 
-```python
-DEFAULT_COOKIES = {
-    '__Host-pretix_csrftoken': 'YOUR_CSRF_TOKEN',
-    '__Host-pretix_session': 'YOUR_SESSION_TOKEN',
-    'cf_clearance': 'YOUR_CF_CLEARANCE'
-}
+### Cookie Extraction
+
+TIXBUSTER requires 3 cookies and 1 CSRF token from your browser session:
+
+1. **Open your browser DevTools** (F12 or Right-click → Inspect)
+2. **Go to Network tab**
+3. **Add an item to cart** on the Pretix site (any item, any quantity)
+4. **Find the `/cart/voucher` request** in the Network tab
+5. **Click on it and go to Headers section**
+6. **Copy the following from the Cookie header:**
+   - `__Host-pretix_csrftoken` - CSRF cookie
+   - `__Host-pretix_session` - Session cookie
+   - `cf_clearance` - Cloudflare clearance (if present)
+7. **Copy the CSRF middleware token** from the request payload (Form Data section):
+   - `csrfmiddlewaretoken` - CSRF token
+
+### Setting Up .env
+
+Copy `.env.example` to `.env`:
+
+```bash
+cp .env.example .env
 ```
 
-Get these from your browser DevTools → Network tab → any Pretix request → Cookie header.
+Edit `.env` and paste your extracted values:
+
+```bash
+# Required: CSRF cookie from Cookie header
+PRETIX_CSRF_COOKIE=your_csrf_cookie_here
+
+# Required: Session cookie from Cookie header
+PRETIX_SESSION=your_session_cookie_here
+
+# Required: CSRF middleware token from request payload
+PRETIX_CSRF_TOKEN=your_csrf_middleware_token_here
+
+# Optional: Cloudflare clearance (only if Cloudflare protection active)
+PRETIX_CF_CLEARANCE=your_cloudflare_clearance_here
+
+# Target Pretix instance URL
+PRETIX_BASE_URL=https://tix.example.com
+```
+
+**Note:** The `.env` file is git-ignored and will not be committed.
 
 ## CLI Commands
 
@@ -131,20 +177,37 @@ python3 main.py export full_wordlist.txt
 python3 main.py export priority.txt --priority
 ```
 
-## Wordlist Categories
+## Custom Wordlists
 
-| Category | Count | Description |
-|----------|-------|-------------|
-| Speakers | 882 | Common speaker name patterns |
-| Variations | 840 | Pronoun + adjective combinations |
-| CTF Patterns | 85 | Encodings, flags, leetspeak |
-| Events | 73 | Generic event naming patterns |
-| Common | 68 | GUEST, FREE, VIP, DISCOUNT, etc. |
-| Venue | 56 | Venue-related patterns |
-| Sponsors | 49 | Sponsor naming patterns |
-| Movements | 45 | Tech movement keywords |
-| Names | 32 | Common name patterns |
-| Themes | 28 | Generic theme keywords |
+TIXBUSTER supports loading custom wordlists from files. You can:
+
+1. **Use built-in wordlists** - Generated from common patterns
+2. **Generate from event websites** - Use `generate-wordlist` command to scrape speakers/talks/sponsors
+3. **Use external wordlists** - Like [SecLists](https://github.com/danielmiessler/SecLists)
+
+### Wordlist Format
+
+One voucher code per line, uppercase recommended, comments with `#`:
+
+```
+# My custom voucher codes
+SPECIALCODE2025
+GUESTPASS
+VIP2025
+# Add more codes below
+```
+
+### Using SecLists
+
+SecLists contains useful password/pattern dictionaries that can be adapted for vouchers:
+
+```bash
+# Clone SecLists
+git clone https://github.com/danielmiessler/SecLists.git
+
+# Use passwords as base patterns
+python3 main.py test --wordlist SecLists/Passwords/Common-Credentials/10k-most-common.txt
+```
 
 ## Response Types
 
@@ -162,13 +225,18 @@ python3 main.py export priority.txt --priority
 ```
 tixbuster/
 ├── main.py                # CLI interface
+├── pyproject.toml         # Project dependencies
+├── .env.example           # Cookie configuration template
+├── .env                   # Your cookies (git-ignored)
 ├── src/
 │   ├── __init__.py
-│   ├── wordlist.py       # 2151 patterns
-│   ├── tester.py         # Core testing engine
-│   └── session.py        # Session management
+│   ├── wordlist.py        # Built-in patterns
+│   ├── tester.py          # Core testing engine
+│   ├── session.py         # Session & cookie management
+│   ├── scraper.py         # Web scraping for wordlist generation
+│   └── pattern_generator.py  # Pattern generation from scraped data
 ├── data/
-│   └── custom.txt        # Custom patterns (optional)
+│   └── custom.txt         # Custom patterns (optional)
 └── README.md
 ```
 
@@ -251,14 +319,14 @@ python3 main.py test --wordlist data/custom.txt
 Look, we get it - some folks are broke af and just want to network at conferences. While this tool *could* theoretically help with that in rare edge cases, **it's absolutely not recommended nor is this software intended for such actions**.
 
 This tool is for:
-- ✅ Security research on systems you own/have permission to test
-- ✅ CTF challenges and competitions
-- ✅ Authorized penetration testing
+- Security research on systems you own/have permission to test
+- CTF challenges and competitions
+- Authorized penetration testing
 
 **Not for:**
-- ❌ Unauthorized access attempts
-- ❌ Fraud or theft
-- ❌ Violating terms of service
+- Unauthorized access attempts
+- Fraud or theft
+- Violating terms of service
 
 Don't be a dick. Support conferences if you can afford it.
 
@@ -336,4 +404,4 @@ PRs welcome for:
 
 ---
 
-**TIXBUSTER** - Because sometimes the tickets just want to be free 🎫
+**TIXBUSTER** - Because sometimes the tickets just want to be free

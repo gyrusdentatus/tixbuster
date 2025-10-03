@@ -1,5 +1,8 @@
 # TIXBUSTER - Gitignore
 
+# Environment and secrets
+.env
+
 # Results and outputs
 results.json
 voucher_results.txt

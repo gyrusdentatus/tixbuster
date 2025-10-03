@@ -4,24 +4,46 @@ Session and cookie management for TIXBUSTER
 
 import requests
 import sys
+import os
+from pathlib import Path
+
+# Try to load dotenv for .env file support
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    DOTENV_AVAILABLE = True
+except ImportError:
+    DOTENV_AVAILABLE = False
 
 
 class SessionManager:
     """Manages HTTP session, cookies, and CSRF tokens"""
 
-    # Default cookies (update these from your browser)
+    # Fallback defaults (overridden by .env if available)
     DEFAULT_COOKIES = {
         '__Host-pretix_csrftoken': 'D0k1wkhR0rsDxYyglTCsjThPEfnlwHB8',
         '__Host-pretix_session': 'sq0i3grzzl0qx5syby8fp0g2pal9y1k7',
-        'cf_clearance': 'FzhHpo50AKGs3VElxkloWnVPsQoIyzHJfJZettUxhx8-1759455892-1.2.1.1-k2IUVTJEHB7bT4eWhvBpKzX58EbXUmwD3vDp3FSvZMpyHjVZioROy.p9g5ZonDsyd6.YkGiCYWygkmHnA3gJOX1o3DTdVh8A5_ABECHvCedsDTx1qwQMJ55aARofi5Af84zYm5z4tPFMTyEzgjdpTiFf1_rGL.xJBWM2MpIEOoWn.3BJuZBrirCb2oCNvx2TNtQ1Oq1FgQ2Yk5qev8_G3W81NZWYbyyQpVLf_5WJTjU'
+        'cf_clearance': 'Ud4hK2nf5JIcT5b6N67_Yt15EoopQi1mpo7c_7NTn_w-1759508334-1.2.1.1-hcDSC8QBzqxa6v76mat9JArmd179RufwQeRAd9GRq5S12lc7r0amB1h7A0nIzmQ3w6XWK3fDZrnGwEwOKxzbpcpwQHUWLOnk4eoMqzq35iQQ33QkuLMKs07fuze1ltgjRPZcOLf7Iu7azItFrGhM6wmvl42dQisXvYcvLJmtFxmDvPdpwQmN2WzW4grXGfaea.aM2Wcw7.eER0cBiiPY_PUilxykNiPpQw_Ab1ubBUM'
     }
 
     DEFAULT_CSRF = 'vx5XaRivcrf40vwzmkjXuWzXhqxmNxlkYnfOw1pc2IxxnjUFx3LfDFGCLvKx94Mi'
+    DEFAULT_BASE_URL = 'https://tix.darkprague.com'
 
-    def __init__(self, base_url="https://tix.darkprague.com", cookies=None, csrf_token=None, verbose=False):
-        self.base_url = base_url
-        self.cookies = cookies or self.DEFAULT_COOKIES.copy()
-        self.csrf_token = csrf_token or self.DEFAULT_CSRF
+    def __init__(self, base_url=None, cookies=None, csrf_token=None, verbose=False):
+        # Load from .env if available, fallback to defaults
+        self.base_url = base_url or os.getenv('PRETIX_BASE_URL', self.DEFAULT_BASE_URL)
+
+        # Build cookies dict from .env or use provided/defaults
+        if cookies is None:
+            self.cookies = {
+                '__Host-pretix_csrftoken': os.getenv('PRETIX_CSRF_COOKIE', self.DEFAULT_COOKIES['__Host-pretix_csrftoken']),
+                '__Host-pretix_session': os.getenv('PRETIX_SESSION', self.DEFAULT_COOKIES['__Host-pretix_session']),
+                'cf_clearance': os.getenv('PRETIX_CF_CLEARANCE', self.DEFAULT_COOKIES.get('cf_clearance', ''))
+            }
+        else:
+            self.cookies = cookies
+
+        self.csrf_token = csrf_token or os.getenv('PRETIX_CSRF_TOKEN', self.DEFAULT_CSRF)
         self.verbose = verbose
         self.session = None
 
