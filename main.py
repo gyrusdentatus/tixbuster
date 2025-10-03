@@ -17,6 +17,8 @@ from src.wordlist import (
 )
 from src.session import SessionManager, validate_and_exit_if_invalid
 from src.tester import VoucherTester
+from src.scraper import EventScraper
+from src.pattern_generator import PatternGenerator
 
 
 def cmd_validate(args):
@@ -179,6 +181,55 @@ def cmd_export(args):
     return 0
 
 
+def cmd_generate_wordlist(args):
+    """Generate wordlist from event website"""
+    print("=" * 60)
+    print("WORDLIST GENERATION FROM WEB CONTENT")
+    print("=" * 60)
+
+    # Initialize scraper and generator
+    scraper = EventScraper(verbose=args.verbose)
+    generator = PatternGenerator(verbose=args.verbose)
+
+    # Crawl the event website
+    print(f"\n[*] Target URL: {args.url}")
+    scraped_data = scraper.crawl_event(args.url, max_depth=args.depth)
+
+    # Generate patterns
+    print(f"\n[*] Generating voucher patterns...")
+    patterns = generator.generate_all(scraped_data, include_variations=not args.no_variations)
+
+    # Create data directory if needed
+    import os
+    os.makedirs('data', exist_ok=True)
+
+    # Save to file
+    output_file = args.output or 'data/generated_wordlist.txt'
+    with open(output_file, 'w') as f:
+        f.write(f"# TIXBUSTER Generated Wordlist\n")
+        f.write(f"# Source: {args.url}\n")
+        f.write(f"# Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(f"# Total patterns: {len(patterns)}\n")
+        f.write(f"#\n")
+        f.write(f"# Scraped data:\n")
+        f.write(f"#   - {len(scraped_data['speakers'])} speakers\n")
+        f.write(f"#   - {len(scraped_data['talks'])} talks\n")
+        f.write(f"#   - {len(scraped_data['sponsors'])} sponsors\n")
+        f.write(f"#\n\n")
+
+        for pattern in patterns:
+            f.write(f"{pattern}\n")
+
+    print(f"\n[*] Saved {len(patterns)} patterns to {output_file}")
+
+    # Suggest next steps
+    print(f"\n[*] Next steps:")
+    print(f"    python3 main.py test --wordlist {output_file}")
+    print(f"    python3 main.py test --wordlist {output_file} --threads 5")
+
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='TIXBUSTER - Pretix Voucher Bruteforcer',
@@ -239,6 +290,14 @@ Examples:
     export_parser.add_argument('output', help='Output filename')
     export_parser.add_argument('--priority', '-p', action='store_true', help='Export priority codes only')
 
+    # generate-wordlist command
+    gen_parser = subparsers.add_parser('generate-wordlist', help='Generate wordlist from event website')
+    gen_parser.add_argument('url', help='Event website URL')
+    gen_parser.add_argument('--output', '-o', help='Output file (default: data/generated_wordlist.txt)')
+    gen_parser.add_argument('--depth', '-d', type=int, default=2, help='Crawl depth (default: 2)')
+    gen_parser.add_argument('--no-variations', action='store_true', help='Skip common suffix variations')
+    gen_parser.add_argument('--verbose', '-v', action='store_true', help='Verbose output')
+
     args = parser.parse_args()
 
     if not args.command:
@@ -251,7 +310,8 @@ Examples:
         'test': cmd_test,
         'stats': cmd_stats,
         'search': cmd_search,
-        'export': cmd_export
+        'export': cmd_export,
+        'generate-wordlist': cmd_generate_wordlist
     }
 
     return commands[args.command](args)
