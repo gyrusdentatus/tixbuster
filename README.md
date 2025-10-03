@@ -8,10 +8,13 @@ Systematically tests voucher codes against Pretix-based ticket platforms with ra
 
 - 🎯 **2,151+ built-in patterns** from common voucher naming conventions
 - 🔒 **Session validation** with control test
-- ⚡ **Rate limiting protection** with adaptive delays
-- 🔍 **Multiple search modes** (priority, full scan, custom wordlist)
+- ⚡ **Rate limiting protection** with adaptive delays and auto-throttling
+- 🔥 **Multi-threading support** (1-10 threads for parallel testing)
+- 🎲 **Random bruteforce** with configurable patterns, prefixes, and charsets
+- 🔍 **Multiple search modes** (priority, full scan, custom wordlist, random)
 - 📊 **Detailed statistics** and result categorization
 - 🛡️ **Cloudflare detection** and handling
+- 🎯 **Auto-exit on success** with epic banner
 
 ## Quick Start
 
@@ -23,8 +26,12 @@ python3 main.py validate
 # 3. Test priority codes (36 highest probability)
 python3 main.py test --priority
 
-# 4. Test all patterns (~1 hour for 2151 codes)
-python3 main.py test --all
+# 4. Test all patterns with multi-threading (~10-20 minutes with 5 threads)
+python3 main.py test --all --threads 5
+
+# 5. Random bruteforce if you know the pattern
+# Example: if voucher is WTFLOL, this should find it
+python3 main.py test --random 50 --random-prefix WTFLO --random-length 1 --random-charset upper --verbose
 ```
 
 ## Installation
@@ -63,11 +70,27 @@ Tests session validity using a control voucher code.
 ### Test Vouchers
 
 ```bash
-# Priority codes only (~2-3 minutes)
+# Priority codes only (~2-3 minutes single-threaded)
 python3 main.py test --priority
 
-# All patterns (~60-90 minutes)
-python3 main.py test --all
+# All patterns with multi-threading (~10-20 minutes with 5 threads)
+python3 main.py test --all --threads 5
+
+# Aggressive multi-threading with no auto-throttling (~5-10 minutes, 10 threads)
+python3 main.py test --all --threads 10 --no-brakes
+
+# Random bruteforce (100 random 6-char codes A-Z,0-9)
+python3 main.py test --random 100
+
+# Random with DARK prefix (like DARKAB12CD, DARK99ZZQQ)
+python3 main.py test --random 50 --random-prefix DARK --random-length 6
+
+# Random with FREE suffix (like KK3DFREE, X9Y1FREE)
+python3 main.py test --random 50 --random-suffix FREE --random-length 4
+
+# Targeted bruteforce if you know part of the code
+# Example: if voucher is WTFLOL, this should find it
+python3 main.py test --random 50 --random-prefix WTFLO --random-length 1 --random-charset upper --verbose
 
 # Custom wordlist
 python3 main.py test --wordlist my_codes.txt
@@ -204,18 +227,24 @@ python3 main.py test --wordlist data/custom.txt
 
 ## Performance
 
-- **Priority codes**: ~2-3 minutes (36 codes)
-- **Full scan**: ~60-90 minutes (2,151 codes)
-- **Rate**: ~0.5-1.0 requests/second (adaptive)
-- **Memory**: < 50MB
+- **Priority codes**: ~2-3 minutes (36 codes, single-threaded)
+- **Full scan single-threaded**: ~60-90 minutes (2,151 codes)
+- **Full scan multi-threaded (5 threads)**: ~10-20 minutes (2,151 codes)
+- **Full scan aggressive (10 threads, --no-brakes)**: ~5-10 minutes (2,151 codes)
+- **Rate**: ~0.5-1.0 req/s (single), ~4-5 req/s (5 threads), ~8-10 req/s (10 threads)
+- **Memory**: < 50MB (single), < 100MB (10 threads)
+- **Auto-throttling**: Slows down on consecutive 429/403 errors (disable with `--no-brakes`)
 
 ## Strategy Tips
 
 1. Start with priority codes (highest probability)
-2. Monitor for EXPIRED codes (indicates valid format)
-3. Use --verbose to understand response patterns
-4. Check UNKNOWN responses manually
-5. Add successful patterns to custom wordlist
+2. Use multi-threading for faster scans (`--threads 5` is safe, `--threads 10` is aggressive)
+3. If you know part of the voucher pattern, use random bruteforce with prefix/suffix
+4. Monitor for EXPIRED codes (indicates valid format)
+5. Use `--verbose` to understand response patterns
+6. Check UNKNOWN responses manually
+7. Add successful patterns to custom wordlist
+8. Tool auto-exits on first SUCCESS - you'll know immediately when a valid code is found
 
 ## Ethical Notice
 
@@ -242,7 +271,27 @@ Built for testing [pretix](https://github.com/pretix/pretix) ticketing systems.
 - **GitHub**: https://github.com/pretix/pretix
 - **License**: Apache 2.0
 
-## Roadmap / TODO
+## Roadmap
+
+### Completed Features ✅
+
+- [x] **Multi-threading Support** (v0.0.1)
+  - ThreadPoolExecutor for parallel requests
+  - Configurable thread count (`--threads 1-10`)
+  - Per-thread session management
+  - Auto-throttling on consecutive rate limits
+  - `--no-brakes` flag to disable throttling
+
+- [x] **Random Bruteforce Pattern Generation** (v0.0.1)
+  - Generate random codes with configurable patterns
+  - Multiple charset options (upper, lower, alphanum, uppernumeric)
+  - Prefix/suffix support for targeted bruteforce
+  - Configurable code length
+
+- [x] **Auto-exit on Success** (v0.0.1)
+  - Stops immediately when valid voucher found
+  - Epic success banner
+  - Thread pool cancellation on success
 
 ### Planned Features
 
@@ -253,29 +302,25 @@ Built for testing [pretix](https://github.com/pretix/pretix) ticketing systems.
   - Generate targeted wordlist from scraped content
   - Output to `data/generated_wordlist.txt`
 
-- [ ] **Multi-threading Support**
-  - Move from current ~1.2 req/sec slowmo to actual speed
-  - Python threading/asyncio for parallel requests
-  - Configurable thread count (default: 5-10 threads)
-  - Per-thread rate limiting to avoid detection
+- [ ] **Generic Target URL Support**
+  - Remove hardcoded darkprague.com
+  - Add `--url` / `-u` CLI argument
+  - Support any Pretix instance
 
-- [ ] **WAF Detection & Adaptive Throttling**
+- [ ] **WAF Detection & Adaptive Throttling Improvements**
   - Detect Cloudflare, Imperva, and other WAFs
-  - Monitor timeout and error patterns
   - Interactive prompt when throttled (sqlmap-style: "Continue? [Y/n]")
-  - Auto-adjust thread count and delays based on responses
-  - Fallback to single-threaded mode when necessary
+  - More sophisticated auto-adjustment algorithms
 
 - [ ] **Pretix Permission Enumeration**
   - Check https://docs.pretix.eu/dev/development/implementation/permissions.html
   - Detect permission misconfigurations
   - Enumerate available API endpoints
   - Test for authorization bypasses
-  - Report structural issues per https://docs.pretix.eu/dev/development/structure.html
 
 ### Community
 
-PRs welcome for any of the above features!
+PRs welcome for any features!
 
 ## License
 
