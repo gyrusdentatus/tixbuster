@@ -89,7 +89,7 @@ def cmd_test(args):
         return 1
 
     # Create tester
-    tester = VoucherTester(verbose=args.verbose, threads=args.threads)
+    tester = VoucherTester(verbose=args.verbose, threads=args.threads, no_brakes=args.no_brakes)
 
     # Test codes
     print(f"[*] Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -252,6 +252,7 @@ Examples:
     test_parser.add_argument('--code', '-c', help='Test a single voucher code')
     test_parser.add_argument('--output', '-o', default='results.json', help='Output file for results')
     test_parser.add_argument('--threads', '-t', type=int, default=1, help='Number of threads (default: 1, safe: 5, aggressive: 10)')
+    test_parser.add_argument('--no-brakes', action='store_true', help='Disable auto-throttling on rate limits (full speed always)')
 
     # Random bruteforce options
     test_parser.add_argument('--random', '-r', type=int, metavar='COUNT',

@@ -14,15 +14,17 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 class VoucherTester:
     """Core voucher testing engine"""
 
-    def __init__(self, base_url="https://tix.darkprague.com", verbose=False, threads=1):
+    def __init__(self, base_url="https://tix.darkprague.com", verbose=False, threads=1, no_brakes=False):
         self.base_url = base_url
         self.verbose = verbose
         self.threads = threads
+        self.no_brakes = no_brakes
         self.rate_limited = False
         self.request_count = 0
         self.start_time = datetime.now()
         self.tested_codes = set()
         self.lock = threading.Lock()  # Thread-safe result aggregation
+        self.consecutive_rate_limits = 0  # Track consecutive 429/403
 
     def adaptive_delay(self):
         """Calculate adaptive delay based on request rate"""
@@ -277,6 +279,8 @@ class VoucherTester:
             return results
 
         print(f"[*] Using {self.threads} threads for parallel testing")
+        if self.no_brakes:
+            print(f"[*] NO BRAKES MODE - will not auto-throttle on rate limits")
 
         # Each thread gets its own session (thread-local)
         def test_code_wrapper(code):
@@ -306,9 +310,21 @@ class VoucherTester:
                         # Update results thread-safely
                         self._update_results(results, code, status, detail)
 
-                        # Just log rate limiting, don't slow down
+                        # Auto-throttle on consecutive rate limits (unless --no-brakes)
                         if status == 'RATE_LIMITED':
-                            print("[!] Rate limit warning (429/403) - continuing at current speed")
+                            with self.lock:
+                                self.consecutive_rate_limits += 1
+
+                            if not self.no_brakes and self.consecutive_rate_limits > 1:
+                                print(f"\n[!] Detected {self.consecutive_rate_limits} consecutive rate limits (429/403)")
+                                print(f"[!] Auto-throttling: Adding 2 second delay between requests")
+                                time.sleep(2)
+                            elif self.no_brakes:
+                                print("[!] Rate limit (429/403) - NO BRAKES, continuing full speed")
+                        else:
+                            # Reset counter on successful request
+                            with self.lock:
+                                self.consecutive_rate_limits = 0
 
                         completed += 1
 
