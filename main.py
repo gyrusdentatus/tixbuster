@@ -55,7 +55,10 @@ def cmd_test(args):
     print()
 
     # Get wordlist
-    if args.priority:
+    if args.code:
+        codes = [args.code.upper()]
+        print(f"[*] Testing single code: {codes[0]}")
+    elif args.priority:
         codes = get_priority_codes()
         print(f"[*] Testing {len(codes)} priority codes")
     elif args.wordlist:
@@ -185,6 +188,9 @@ Examples:
   # Validate your session cookies
   python3 main.py validate
 
+  # Test a single code
+  python3 main.py test --code KXBUDZ
+
   # Test priority codes (fastest, highest probability)
   python3 main.py test --priority
 
@@ -217,6 +223,7 @@ Examples:
     test_parser.add_argument('--priority', '-p', action='store_true', help='Test priority codes only')
     test_parser.add_argument('--all', '-a', action='store_true', help='Test all 2100+ patterns')
     test_parser.add_argument('--wordlist', '-w', help='Load codes from custom file')
+    test_parser.add_argument('--code', '-c', help='Test a single voucher code')
     test_parser.add_argument('--output', '-o', default='results.json', help='Output file for results')
 
     # stats command
