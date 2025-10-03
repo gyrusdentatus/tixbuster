@@ -416,9 +416,9 @@ Examples:
                             help='Generate COUNT random codes to test')
     test_parser.add_argument('--random-length', type=int, default=6,
                             help='Length of random portion (default: 6)')
-    test_parser.add_argument('--random-charset', choices=['upper', 'lower', 'alphanum', 'uppernumeric'],
+    test_parser.add_argument('--random-charset', choices=['upper', 'lower', 'numeric', 'alphanum', 'uppernumeric'],
                             default='uppernumeric',
-                            help='Character set (default: uppernumeric A-Z,0-9)')
+                            help='Character set (default: uppernumeric A-Z,0-9, or numeric for 0-9 only)')
     test_parser.add_argument('--random-prefix', default='',
                             help='Prefix for random codes (e.g., DARK)')
     test_parser.add_argument('--random-suffix', default='',

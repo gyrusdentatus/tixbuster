@@ -329,6 +329,7 @@ def generate_random_codes(count=100, length=6, charset='uppernumeric', prefix=''
     charsets = {
         'upper': string.ascii_uppercase,
         'lower': string.ascii_lowercase,
+        'numeric': string.digits,
         'alphanum': string.ascii_letters + string.digits,
         'uppernumeric': string.ascii_uppercase + string.digits
     }
