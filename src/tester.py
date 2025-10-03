@@ -147,7 +147,12 @@ class VoucherTester:
                         message = poll_result.get('message', '')
 
                         # Enhanced categorization based on actual messages
-                        if 'expired' in message.lower():
+                        if 'did not find any position in your cart' in message.lower():
+                            # VALID VOUCHER - just needs items in cart!
+                            if self.verbose:
+                                print(f"[RESULT] VALID (empty cart) - {message}")
+                            return 'SUCCESS', message
+                        elif 'expired' in message.lower():
                             if self.verbose:
                                 print(f"[RESULT] EXPIRED - {message}")
                             return 'EXPIRED', async_id
@@ -190,8 +195,13 @@ class VoucherTester:
             self.tested_codes.add(code)
 
             if status == 'SUCCESS':
-                print(f"\n[!!!] VALID CODE FOUND: {code}")
-                print(f"      Details: {detail}")
+                print(f"\n{'='*60}")
+                print(f"THE VOUCHER FOUND!!!")
+                print(f"VOUCHER IS ... {code} ....!!!")
+                print(f"{code}!!!")
+                print(f"MUCH WOW!")
+                print(f"{'='*60}")
+                print(f"Details: {detail}")
                 results['SUCCESS'].append(code)
             elif status == 'EXPIRED':
                 results['EXPIRED'].append(code)
@@ -239,6 +249,10 @@ class VoucherTester:
             # Test the code
             status, detail = self.test_voucher(code, session, csrf_token)
             self._update_results(results, code, status, detail)
+
+            # Exit immediately on success
+            if status == 'SUCCESS':
+                return results
 
             # Just log rate limiting, don't stop
             if status == 'RATE_LIMITED':
@@ -309,6 +323,11 @@ class VoucherTester:
 
                         # Update results thread-safely
                         self._update_results(results, code, status, detail)
+
+                        # Exit immediately on success
+                        if status == 'SUCCESS':
+                            executor.shutdown(wait=False, cancel_futures=True)
+                            return results
 
                         # Auto-throttle on consecutive rate limits (unless --no-brakes)
                         if status == 'RATE_LIMITED':
