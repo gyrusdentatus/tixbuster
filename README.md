@@ -217,7 +217,9 @@ python3 main.py test --wordlist data/custom.txt
 4. Check UNKNOWN responses manually
 5. Add successful patterns to custom wordlist
 
-## Ethical Usage
+## Ethical Notice
+
+Look, we get it - some folks are broke af and just want to network at conferences. While this tool *could* theoretically help with that in rare edge cases, **it's absolutely not recommended nor is this software intended for such actions**.
 
 This tool is for:
 - ✅ Security research on systems you own/have permission to test
@@ -228,6 +230,52 @@ This tool is for:
 - ❌ Unauthorized access attempts
 - ❌ Fraud or theft
 - ❌ Violating terms of service
+
+Don't be a dick. Support conferences if you can afford it.
+
+## Credits & Attribution
+
+Built for testing [pretix](https://github.com/pretix/pretix) ticketing systems.
+
+- **Pretix**: Open-source ticketing and event management platform
+- **Documentation**: https://docs.pretix.eu/
+- **GitHub**: https://github.com/pretix/pretix
+- **License**: Apache 2.0
+
+## Roadmap / TODO
+
+### Planned Features
+
+- [ ] **Automated Wordlist Generation from Web Content**
+  - Fetch event landing page
+  - Crawl program/schedule for talk titles
+  - Extract speaker names automatically
+  - Generate targeted wordlist from scraped content
+  - Output to `data/generated_wordlist.txt`
+
+- [ ] **Multi-threading Support**
+  - Move from current ~1.2 req/sec slowmo to actual speed
+  - Python threading/asyncio for parallel requests
+  - Configurable thread count (default: 5-10 threads)
+  - Per-thread rate limiting to avoid detection
+
+- [ ] **WAF Detection & Adaptive Throttling**
+  - Detect Cloudflare, Imperva, and other WAFs
+  - Monitor timeout and error patterns
+  - Interactive prompt when throttled (sqlmap-style: "Continue? [Y/n]")
+  - Auto-adjust thread count and delays based on responses
+  - Fallback to single-threaded mode when necessary
+
+- [ ] **Pretix Permission Enumeration**
+  - Check https://docs.pretix.eu/dev/development/implementation/permissions.html
+  - Detect permission misconfigurations
+  - Enumerate available API endpoints
+  - Test for authorization bypasses
+  - Report structural issues per https://docs.pretix.eu/dev/development/structure.html
+
+### Community
+
+PRs welcome for any of the above features!
 
 ## License
 
