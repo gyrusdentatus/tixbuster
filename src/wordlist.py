@@ -5,6 +5,8 @@ Generic voucher patterns for Pretix ticketing systems
 
 import base64
 import os
+import random
+import string
 
 
 def get_katka_patterns():
@@ -298,6 +300,48 @@ def get_common_discount_patterns():
         'ADMIN', 'PASSWORD', 'SECRET', 'HIDDEN', 'BACKDOOR',
         'TEST', 'DEMO', 'TRIAL', 'BETA', 'ALPHA'
     ]
+
+
+def generate_random_codes(count=100, length=6, charset='uppernumeric', prefix='', suffix=''):
+    """
+    Generate random voucher codes
+
+    Args:
+        count: Number of codes to generate
+        length: Code length (excluding prefix/suffix)
+        charset: 'upper' (A-Z), 'lower' (a-z), 'alphanum' (A-Z,a-z,0-9), 'uppernumeric' (A-Z,0-9)
+        prefix: Fixed prefix (e.g., 'DARK')
+        suffix: Fixed suffix (e.g., '2025')
+
+    Returns:
+        List of random codes
+
+    Examples:
+        generate_random_codes(10, 6, 'upper', prefix='DARK')
+        # ['DARK38YLKZ', 'DARKPPQRST', 'DARKMNBVCX', ...]
+
+        generate_random_codes(10, 4, 'uppernumeric', suffix='FREE')
+        # ['KK3DFREE', 'X9Y1FREE', '4ABCFREE', ...]
+
+        generate_random_codes(5, 6, 'alphanum')
+        # ['KkBdX1', 'Qq8Zz3', 'Mm2Pp7', ...]
+    """
+    charsets = {
+        'upper': string.ascii_uppercase,
+        'lower': string.ascii_lowercase,
+        'alphanum': string.ascii_letters + string.digits,
+        'uppernumeric': string.ascii_uppercase + string.digits
+    }
+
+    chars = charsets.get(charset, string.ascii_uppercase)
+    codes = []
+
+    for _ in range(count):
+        random_part = ''.join(random.choices(chars, k=length))
+        code = f"{prefix}{random_part}{suffix}"
+        codes.append(code)
+
+    return codes
 
 
 def get_priority_codes():
