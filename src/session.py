@@ -73,10 +73,10 @@ class SessionManager:
 
     def validate_session(self):
         """
-        Validate session by testing IMDARK control voucher
+        Validate session by testing with guaranteed-invalid voucher
         Returns: (success: bool, message: str)
         """
-        print("[CONTROL] Testing IMDARK voucher to validate session...")
+        print("[CONTROL] Testing session with invalid voucher...")
 
         # Show cookie info (truncated for security)
         if self.verbose:
@@ -97,23 +97,31 @@ class SessionManager:
                 from tester import VoucherTester
 
             tester = VoucherTester(self.base_url, self.verbose)
-            status, detail = tester.test_voucher('IMDARK', self.session, self.csrf_token)
+            # Use guaranteed-invalid voucher - should return NOTFOUND
+            status, detail = tester.test_voucher('INVALID_SESSION_TEST_999', self.session, self.csrf_token)
 
-            if status == 'EXPIRED':
-                print("[CONTROL] ✓ IMDARK returned 'expired' - cookies valid!")
-                if self.verbose and detail:
-                    print(f"[CONTROL] UUID: {detail}")
+            if status == 'NOTFOUND':
+                # Expected response - session works!
+                print("[CONTROL] ✓ Session valid (got expected 'not found' response)")
+                return True, "Session valid"
+
+            elif status in ['EXPIRED', 'USED', 'LIMITED']:
+                # Also valid responses - means session works, voucher exists
+                print(f"[CONTROL] ✓ Session valid (voucher exists but {status.lower()})")
                 return True, "Session valid"
 
             elif status in ['ERROR', 'EXCEPTION']:
+                # Session broken or network error
                 print(f"[CONTROL] ✗ Session invalid or network error: {detail}")
-                print("[CONTROL] Exiting - please refresh your cookies")
+                print("[CONTROL] Check your cookies and target URL")
                 return False, f"Session error: {detail}"
 
             else:
+                # Unknown response - might be OK
                 print(f"[CONTROL] ⚠ Unexpected response: {status}")
-                print(f"[CONTROL] Detail: {detail}")
-                print("[CONTROL] Continuing anyway, but session might be invalid...")
+                if self.verbose:
+                    print(f"[CONTROL] Detail: {detail}")
+                print("[CONTROL] Continuing anyway...")
                 return True, f"Unexpected response: {status}"
 
         except Exception as e:
