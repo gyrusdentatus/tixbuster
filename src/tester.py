@@ -72,12 +72,6 @@ class VoucherTester:
 
     def test_voucher(self, voucher_code, session, csrf_token):
         """Test a single voucher code"""
-        if self.rate_limited:
-            if self.verbose:
-                print("[!] Rate limited, waiting 60 seconds...")
-            time.sleep(60)
-            self.rate_limited = False
-
         if self.verbose:
             print(f"\n[TEST] Testing voucher: {voucher_code}")
 
@@ -244,11 +238,9 @@ class VoucherTester:
             status, detail = self.test_voucher(code, session, csrf_token)
             self._update_results(results, code, status, detail)
 
-            # Rate limiting backoff
+            # Just log rate limiting, don't stop
             if status == 'RATE_LIMITED':
-                print("[!] Rate limited, backing off...")
-                time.sleep(60)
-                continue
+                print("[!] Rate limit warning (429/403) - continuing")
 
             # Progress callback
             if progress_callback:
@@ -314,10 +306,9 @@ class VoucherTester:
                         # Update results thread-safely
                         self._update_results(results, code, status, detail)
 
-                        # Rate limiting backoff
+                        # Just log rate limiting, don't slow down
                         if status == 'RATE_LIMITED':
-                            print("[!] Rate limited detected, slowing down...")
-                            time.sleep(10)
+                            print("[!] Rate limit warning (429/403) - continuing at current speed")
 
                         completed += 1
 
