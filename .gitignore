@@ -1,0 +1,47 @@
+# TIXBUSTER - Gitignore
+
+# Results and outputs
+results.json
+voucher_results.txt
+*.log
+
+# Custom wordlists (may contain sensitive patterns)
+data/custom.txt
+custom_vouchers.txt
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Legacy scripts (event-specific)
+ctf_voucher_finder.py
+voucher2.py
+voucher1.py
+voucher3.py
+advanced_voucher_tester.py
+imdark_pattern_tester.py
+session_validator.py
+uuid_analyzer.py
+voucher_tester.py
+run_all.py
+
+# Event-specific documentation
+CLAUDE.md
