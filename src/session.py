@@ -27,11 +27,15 @@ class SessionManager:
     }
 
     DEFAULT_CSRF = 'vx5XaRivcrf40vwzmkjXuWzXhqxmNxlkYnfOw1pc2IxxnjUFx3LfDFGCLvKx94Mi'
-    DEFAULT_BASE_URL = 'https://tix.darkprague.com'
 
-    def __init__(self, base_url=None, cookies=None, csrf_token=None, verbose=False):
-        # Load from .env if available, fallback to defaults
-        self.base_url = base_url or os.getenv('PRETIX_BASE_URL', self.DEFAULT_BASE_URL)
+    def __init__(self, base_url, cookies=None, csrf_token=None, verbose=False):
+        # URL is now required (passed from CLI)
+        self.base_url = base_url
+        if not self.base_url:
+            print("\n[!] ERROR: No Pretix URL provided!")
+            print("[!] Usage: python3 main.py test <url> --priority")
+            print("[!] Example: python3 main.py test tix.darkprague.com --priority")
+            sys.exit(1)
 
         # Build cookies dict from .env or use provided/defaults
         if cookies is None:

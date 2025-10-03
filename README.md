@@ -27,18 +27,18 @@ uv pip install requests python-dotenv
 cp .env.example .env
 # Edit .env with your browser cookies (see Configuration below)
 
-# 3. Validate session
-python3 main.py validate
+# 3. Validate session (replace with your target Pretix instance)
+python3 main.py validate tix.darkprague.com
 
 # 4. Test priority codes
-python3 main.py test --priority
+python3 main.py test tix.darkprague.com --priority
 
 # 5. Test all patterns with multi-threading (~10-20 minutes with 5 threads)
-python3 main.py test --all --threads 5
+python3 main.py test tix.darkprague.com --all --threads 5
 
 # 6. Random bruteforce if you know the pattern
 # Example: if voucher is WTFLOL, this should find it
-python3 main.py test --random 50 --random-prefix WTFLO --random-length 1 --random-charset upper --verbose
+python3 main.py test tix.darkprague.com --random 50 --random-prefix WTFLO --random-length 1 --random-charset upper --verbose
 ```
 
 ## Installation
@@ -97,18 +97,29 @@ PRETIX_CSRF_TOKEN=your_csrf_middleware_token_here
 
 # Optional: Cloudflare clearance (only if Cloudflare protection active)
 PRETIX_CF_CLEARANCE=your_cloudflare_clearance_here
-
-# Target Pretix instance URL
-PRETIX_BASE_URL=https://tix.example.com
 ```
 
 **Note:** The `.env` file is git-ignored and will not be committed.
+
+**Target URL:** The Pretix instance URL is specified as a command-line argument, not in `.env`:
+
+```bash
+# Short form (https:// is added automatically)
+python3 main.py test tix.darkprague.com --priority
+
+# Full URL form
+python3 main.py test https://tix.darkprague.com --priority
+```
 
 ## CLI Commands
 
 ### Validate Session
 ```bash
-python3 main.py validate [--verbose]
+python3 main.py validate <url> [--verbose]
+
+# Examples
+python3 main.py validate tix.darkprague.com
+python3 main.py validate https://tix.example.com --verbose
 ```
 
 Tests session validity using a control voucher code.
@@ -117,35 +128,38 @@ Tests session validity using a control voucher code.
 
 ```bash
 # Priority codes only (~2-3 minutes single-threaded)
-python3 main.py test --priority
+python3 main.py test tix.darkprague.com --priority
 
 # All patterns with multi-threading (~10-20 minutes with 5 threads)
-python3 main.py test --all --threads 5
+python3 main.py test tix.darkprague.com --all --threads 5
 
 # Aggressive multi-threading with no auto-throttling (~5-10 minutes, 10 threads)
-python3 main.py test --all --threads 10 --no-brakes
+python3 main.py test tix.darkprague.com --all --threads 10 --no-brakes
 
 # Random bruteforce (100 random 6-char codes A-Z,0-9)
-python3 main.py test --random 100
+python3 main.py test tix.darkprague.com --random 100
 
 # Random with DARK prefix (like DARKAB12CD, DARK99ZZQQ)
-python3 main.py test --random 50 --random-prefix DARK --random-length 6
+python3 main.py test tix.darkprague.com --random 50 --random-prefix DARK --random-length 6
 
 # Random with FREE suffix (like KK3DFREE, X9Y1FREE)
-python3 main.py test --random 50 --random-suffix FREE --random-length 4
+python3 main.py test tix.darkprague.com --random 50 --random-suffix FREE --random-length 4
 
 # Targeted bruteforce if you know part of the code
 # Example: if voucher is WTFLOL, this should find it
-python3 main.py test --random 50 --random-prefix WTFLO --random-length 1 --random-charset upper --verbose
+python3 main.py test tix.darkprague.com --random 50 --random-prefix WTFLO --random-length 1 --random-charset upper --verbose
 
 # Custom wordlist
-python3 main.py test --wordlist my_codes.txt
+python3 main.py test tix.darkprague.com --wordlist my_codes.txt
 
 # Verbose output
-python3 main.py test --priority --verbose
+python3 main.py test tix.darkprague.com --priority --verbose
 
 # Custom output file
-python3 main.py test --priority --output my_results.json
+python3 main.py test tix.darkprague.com --priority --output my_results.json
+
+# Works with any Pretix instance
+python3 main.py test tix.otherconf.com --priority
 ```
 
 ### Statistics
@@ -361,6 +375,12 @@ Built for testing [pretix](https://github.com/pretix/pretix) ticketing systems.
   - Epic success banner
   - Thread pool cancellation on success
 
+- [x] **Generic Target URL Support** (v0.0.2)
+  - Removed hardcoded darkprague.com
+  - URL now required positional argument
+  - Support any Pretix instance
+  - Auto-adds https:// if missing
+
 ### Planned Features
 
 - [ ] **Automated Wordlist Generation from Web Content**
@@ -369,11 +389,6 @@ Built for testing [pretix](https://github.com/pretix/pretix) ticketing systems.
   - Extract speaker names automatically
   - Generate targeted wordlist from scraped content
   - Output to `data/generated_wordlist.txt`
-
-- [ ] **Generic Target URL Support**
-  - Remove hardcoded darkprague.com
-  - Add `--url` / `-u` CLI argument
-  - Support any Pretix instance
 
 - [ ] **WAF Detection & Adaptive Throttling Improvements**
   - Detect Cloudflare, Imperva, and other WAFs

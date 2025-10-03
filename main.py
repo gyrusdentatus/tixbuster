@@ -9,6 +9,16 @@ import sys
 import json
 from datetime import datetime
 
+
+def normalize_url(url):
+    """Normalize URL - add https:// if not present"""
+    if not url:
+        return None
+    url = url.strip()
+    if not url.startswith('http://') and not url.startswith('https://'):
+        url = f'https://{url}'
+    return url.rstrip('/')
+
 from src.wordlist import (
     get_master_wordlist,
     get_priority_codes,
@@ -28,7 +38,10 @@ def cmd_validate(args):
     print("SESSION VALIDATION")
     print("=" * 60)
 
-    manager = SessionManager(verbose=args.verbose)
+    base_url = normalize_url(args.url)
+    print(f"[*] Target: {base_url}\n")
+
+    manager = SessionManager(base_url=base_url, verbose=args.verbose)
     success, message = manager.validate_session()
 
     print("\n" + "=" * 60)
@@ -49,8 +62,11 @@ def cmd_test(args):
     print("TIXBUSTER - PRETIX VOUCHER BRUTEFORCER")
     print("=" * 60)
 
+    base_url = normalize_url(args.url)
+    print(f"[*] Target: {base_url}")
+
     # Create session manager
-    manager = SessionManager(verbose=args.verbose)
+    manager = SessionManager(base_url=base_url, verbose=args.verbose)
 
     # Validate session first
     print()
@@ -91,7 +107,7 @@ def cmd_test(args):
         return 1
 
     # Create tester
-    tester = VoucherTester(verbose=args.verbose, threads=args.threads, no_brakes=args.no_brakes)
+    tester = VoucherTester(base_url=manager.base_url, verbose=args.verbose, threads=args.threads, no_brakes=args.no_brakes)
 
     # Test codes
     print(f"[*] Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -197,31 +213,97 @@ def cmd_export(args):
 
 def cmd_generate_wordlist(args):
     """Generate wordlist from event website"""
+    import os
+    from urllib.parse import urlparse
+
     print("=" * 60)
     print("WORDLIST GENERATION FROM WEB CONTENT")
     print("=" * 60)
+
+    # Validate inputs
+    input_count = sum([bool(args.url), bool(args.url_file), bool(args.text_file)])
+    if input_count == 0:
+        print("[!] Error: Must provide URL, --url-file, or --text-file")
+        return 1
+    if input_count > 1:
+        print("[!] Error: Use only one input method (URL, --url-file, or --text-file)")
+        return 1
 
     # Initialize scraper and generator
     scraper = EventScraper(verbose=args.verbose)
     generator = PatternGenerator(verbose=args.verbose)
 
-    # Crawl the event website
-    print(f"\n[*] Target URL: {args.url}")
-    scraped_data = scraper.crawl_event(args.url, max_depth=args.depth)
+    # Handle text file (browser paste)
+    if args.text_file:
+        print(f"\n[*] Processing raw text from {args.text_file}")
+        with open(args.text_file, 'r', encoding='utf-8', errors='ignore') as f:
+            raw_text = f.read()
+
+        # Extract directly from text (no web fetching)
+        scraped_data = {
+            'speakers': scraper.extract_speakers(raw_text),
+            'talks': scraper.extract_talks(raw_text),
+            'sponsors': scraper.extract_sponsors(raw_text)
+        }
+
+        print(f"[*] Extracted from text:")
+        print(f"    - {len(scraped_data['speakers'])} speakers")
+        print(f"    - {len(scraped_data['talks'])} talks")
+        print(f"    - {len(scraped_data['sponsors'])} sponsors")
+
+        source_url = args.text_file  # Use filename for output naming
+
+    # Handle URL file vs single URL
+    elif args.url_file:
+        # Load URLs from file
+        with open(args.url_file, 'r') as f:
+            urls = [line.strip() for line in f if line.strip() and not line.startswith('#')]
+
+        print(f"\n[*] Loaded {len(urls)} URLs from {args.url_file}")
+        scraped_data = scraper.crawl_multiple_urls(urls, max_depth=args.depth)
+
+        # Use first URL's hostname for output filename
+        source_url = urls[0] if urls else "multiple"
+    else:
+        # Single URL
+        print(f"\n[*] Target URL: {args.url}")
+        scraped_data = scraper.crawl_event(args.url, max_depth=args.depth)
+        source_url = args.url
 
     # Generate patterns
     print(f"\n[*] Generating voucher patterns...")
     patterns = generator.generate_all(scraped_data, include_variations=not args.no_variations)
 
     # Create data directory if needed
-    import os
     os.makedirs('data', exist_ok=True)
 
+    # Determine output filename
+    if args.output:
+        output_file = args.output
+    else:
+        # Extract hostname from URL
+        hostname = urlparse(source_url).netloc
+        # Clean hostname (remove www., replace dots with underscores)
+        clean_hostname = hostname.replace('www.', '').replace('.', '_')
+        output_file = f"data/{clean_hostname}_wordlist.txt"
+
+    # Check if file exists and prevent overwrite
+    if os.path.exists(output_file) and not args.force:
+        # Find unique filename
+        base_name = output_file.replace('.txt', '')
+        counter = 1
+        while os.path.exists(f"{base_name}_{counter}.txt"):
+            counter += 1
+        output_file = f"{base_name}_{counter}.txt"
+        print(f"[*] Output file exists, saving to: {output_file}")
+
     # Save to file
-    output_file = args.output or 'data/generated_wordlist.txt'
     with open(output_file, 'w') as f:
         f.write(f"# TIXBUSTER Generated Wordlist\n")
-        f.write(f"# Source: {args.url}\n")
+        if args.url_file:
+            f.write(f"# Sources: {len(urls)} URLs from {args.url_file}\n")
+        else:
+            f.write(f"# Source: {args.url}\n")
         f.write(f"# Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         f.write(f"# Total patterns: {len(patterns)}\n")
         f.write(f"#\n")
@@ -292,10 +374,12 @@ Examples:
 
     # validate command
     validate_parser = subparsers.add_parser('validate', help='Validate session cookies')
+    validate_parser.add_argument('url', help='Target Pretix URL (e.g., tix.darkprague.com or https://tix.darkprague.com)')
     validate_parser.add_argument('--verbose', '-v', action='store_true', help='Verbose output')
 
     # test command
     test_parser = subparsers.add_parser('test', help='Test voucher codes')
+    test_parser.add_argument('url', help='Target Pretix URL (e.g., tix.darkprague.com or https://tix.darkprague.com)')
     test_parser.add_argument('--verbose', '-v', action='store_true', help='Verbose output')
     test_parser.add_argument('--priority', '-p', action='store_true', help='Test priority codes only')
     test_parser.add_argument('--all', '-a', action='store_true', help='Test all 2100+ patterns')
@@ -333,8 +417,11 @@ Examples:
 
     # generate-wordlist command
     gen_parser = subparsers.add_parser('generate-wordlist', help='Generate wordlist from event website')
-    gen_parser.add_argument('url', help='Event website URL')
-    gen_parser.add_argument('--output', '-o', help='Output file (default: data/generated_wordlist.txt)')
+    gen_parser.add_argument('url', nargs='?', help='Event website URL (or use --url-file or --text-file)')
+    gen_parser.add_argument('--url-file', '-f', help='File containing list of URLs (one per line)')
+    gen_parser.add_argument('--text-file', '-t', help='Raw text file (browser copy/paste content)')
+    gen_parser.add_argument('--output', '-o', help='Output file (default: data/<hostname>_wordlist.txt)')
+    gen_parser.add_argument('--force', action='store_true', help='Overwrite existing output file')
     gen_parser.add_argument('--depth', '-d', type=int, default=2, help='Crawl depth (default: 2)')
     gen_parser.add_argument('--no-variations', action='store_true', help='Skip common suffix variations')
     gen_parser.add_argument('--verbose', '-v', action='store_true', help='Verbose output')

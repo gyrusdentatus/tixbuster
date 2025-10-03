@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 class VoucherTester:
     """Core voucher testing engine"""
 
-    def __init__(self, base_url="https://tix.darkprague.com", verbose=False, threads=1, no_brakes=False):
+    def __init__(self, base_url, verbose=False, threads=1, no_brakes=False):
         self.base_url = base_url
         self.verbose = verbose
         self.threads = threads
