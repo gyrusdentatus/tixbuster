@@ -13,7 +13,8 @@ from src.wordlist import (
     get_master_wordlist,
     get_priority_codes,
     get_wordlist_stats,
-    load_custom_wordlist
+    load_custom_wordlist,
+    generate_random_codes
 )
 from src.session import SessionManager, validate_and_exit_if_invalid
 from src.tester import VoucherTester
@@ -58,6 +59,17 @@ def cmd_test(args):
     if args.code:
         codes = [args.code.upper()]
         print(f"[*] Testing single code: {codes[0]}")
+    elif args.random:
+        codes = generate_random_codes(
+            count=args.random,
+            length=args.random_length,
+            charset=args.random_charset,
+            prefix=args.random_prefix,
+            suffix=args.random_suffix
+        )
+        print(f"[*] Testing {len(codes)} random codes ({args.random_charset}, length={args.random_length})")
+        if args.random_prefix or args.random_suffix:
+            print(f"[*] Pattern: {args.random_prefix}{'X'*args.random_length}{args.random_suffix}")
     elif args.priority:
         codes = get_priority_codes()
         print(f"[*] Testing {len(codes)} priority codes")
@@ -202,6 +214,18 @@ Examples:
   # Test with custom wordlist
   python3 main.py test --wordlist custom.txt
 
+  # Random bruteforce - 100 random 6-char codes (A-Z,0-9)
+  python3 main.py test --random 100
+
+  # Random with DARK prefix (DARKAB12CD, DARK99ZZ)
+  python3 main.py test --random 50 --random-prefix DARK --random-length 6
+
+  # Random with FREE suffix (KK3DFREE, X9Y1FREE)
+  python3 main.py test --random 50 --random-suffix FREE --random-length 4
+
+  # Random uppercase only (KKBDXZ, PPQRST)
+  python3 main.py test --random 100 --random-charset upper
+
   # Show wordlist statistics
   python3 main.py stats
 
@@ -228,6 +252,19 @@ Examples:
     test_parser.add_argument('--code', '-c', help='Test a single voucher code')
     test_parser.add_argument('--output', '-o', default='results.json', help='Output file for results')
     test_parser.add_argument('--threads', '-t', type=int, default=1, help='Number of threads (default: 1, safe: 5, aggressive: 10)')
+
+    # Random bruteforce options
+    test_parser.add_argument('--random', '-r', type=int, metavar='COUNT',
+                            help='Generate COUNT random codes to test')
+    test_parser.add_argument('--random-length', type=int, default=6,
+                            help='Length of random portion (default: 6)')
+    test_parser.add_argument('--random-charset', choices=['upper', 'lower', 'alphanum', 'uppernumeric'],
+                            default='uppernumeric',
+                            help='Character set (default: uppernumeric A-Z,0-9)')
+    test_parser.add_argument('--random-prefix', default='',
+                            help='Prefix for random codes (e.g., DARK)')
+    test_parser.add_argument('--random-suffix', default='',
+                            help='Suffix for random codes (e.g., 2025)')
 
     # stats command
     stats_parser = subparsers.add_parser('stats', help='Show wordlist statistics')
