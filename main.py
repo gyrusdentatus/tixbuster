@@ -38,7 +38,17 @@ def cmd_validate(args):
     print("SESSION VALIDATION")
     print("=" * 60)
 
-    base_url = normalize_url(args.url)
+    # Check --url flag first, then positional arg
+    target_url = getattr(args, 'url_flag', None) or args.url
+
+    if not target_url:
+        print("\n[!] Error: No target URL provided")
+        print("[!] Usage: python3 main.py validate <url>")
+        print("[!] Example: python3 main.py validate tix.darkprague.com")
+        print("[!] Or: python3 main.py validate --url https://tix.example.com")
+        sys.exit(1)
+
+    base_url = normalize_url(target_url)
     print(f"[*] Target: {base_url}\n")
 
     manager = SessionManager(base_url=base_url, verbose=args.verbose)
@@ -62,7 +72,17 @@ def cmd_test(args):
     print("TIXBUSTER - PRETIX VOUCHER BRUTEFORCER")
     print("=" * 60)
 
-    base_url = normalize_url(args.url)
+    # Check --url flag first, then positional arg
+    target_url = getattr(args, 'url_flag', None) or args.url
+
+    if not target_url:
+        print("\n[!] Error: No target URL provided")
+        print("[!] Usage: python3 main.py test <url> [options]")
+        print("[!] Example: python3 main.py test tix.darkprague.com --priority")
+        print("[!] Or: python3 main.py test --url https://tix.example.com --priority")
+        sys.exit(1)
+
+    base_url = normalize_url(target_url)
     print(f"[*] Target: {base_url}")
 
     # Create session manager
@@ -374,12 +394,14 @@ Examples:
 
     # validate command
     validate_parser = subparsers.add_parser('validate', help='Validate session cookies')
-    validate_parser.add_argument('url', help='Target Pretix URL (e.g., tix.darkprague.com or https://tix.darkprague.com)')
+    validate_parser.add_argument('url', nargs='?', help='Target Pretix URL (e.g., tix.darkprague.com or https://tix.darkprague.com)')
+    validate_parser.add_argument('--url', '-u', dest='url_flag', help='Target Pretix URL (overrides positional arg)')
     validate_parser.add_argument('--verbose', '-v', action='store_true', help='Verbose output')
 
     # test command
     test_parser = subparsers.add_parser('test', help='Test voucher codes')
-    test_parser.add_argument('url', help='Target Pretix URL (e.g., tix.darkprague.com or https://tix.darkprague.com)')
+    test_parser.add_argument('url', nargs='?', help='Target Pretix URL (e.g., tix.darkprague.com or https://tix.darkprague.com)')
+    test_parser.add_argument('--url', '-u', dest='url_flag', help='Target Pretix URL (overrides positional arg)')
     test_parser.add_argument('--verbose', '-v', action='store_true', help='Verbose output')
     test_parser.add_argument('--priority', '-p', action='store_true', help='Test priority codes only')
     test_parser.add_argument('--all', '-a', action='store_true', help='Test all 2100+ patterns')
