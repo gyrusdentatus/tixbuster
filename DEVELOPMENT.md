@@ -8,9 +8,6 @@ This document outlines the implementation plan for the roadmap features listed i
 
 ## Feature 1: Automated Wordlist Generation from Web Content
 
-### Priority: HIGH
-### Estimated Effort: 4-6 hours
-
 ### Requirements
 - Fetch event landing page HTML
 - Parse and extract speaker names, talk titles, sponsor names
@@ -100,10 +97,168 @@ python3 main.py generate-wordlist https://darkprague.com
 
 ---
 
-## Feature 2: Multi-threading Support
+## Feature 2: Random Bruteforce Pattern Generation
 
-### Priority: MEDIUM
-### Estimated Effort: 3-4 hours
+### Requirements
+- Generate random alphanumeric codes with configurable patterns
+- Support prefix, suffix, or fully random modes
+- Character sets: A-Z, a-z, 0-9 (configurable)
+- CLI control over pattern length and count
+
+### Implementation Plan
+
+#### Files to Modify:
+- `src/wordlist.py` - Add random generation functions
+- `main.py` - Add `--random` flag and related options
+
+#### Core Logic:
+
+**src/wordlist.py:**
+```python
+import random
+import string
+
+def generate_random_codes(count=100, length=6, charset='upper', prefix='', suffix=''):
+    """
+    Generate random voucher codes
+
+    Args:
+        count: Number of codes to generate
+        length: Code length (excluding prefix/suffix)
+        charset: 'upper' (A-Z), 'lower' (a-z), 'alphanum' (A-Z,a-z,0-9), 'uppernumeric' (A-Z,0-9)
+        prefix: Fixed prefix (e.g., 'DARK')
+        suffix: Fixed suffix (e.g., '2025')
+
+    Returns:
+        List of random codes
+
+    Examples:
+        generate_random_codes(10, 6, 'upper', prefix='DARK')
+        # ['DARK38YLKZ', 'DARKPPQRST', 'DARKMNBVCX', ...]
+
+        generate_random_codes(10, 4, 'uppernumeric', suffix='FREE')
+        # ['KK3DFREE', 'X9Y1FREE', '4ABCFREE', ...]
+
+        generate_random_codes(5, 6, 'alphanum')
+        # ['KkBdX1', 'Qq8Zz3', 'Mm2Pp7', ...]
+    """
+    charsets = {
+        'upper': string.ascii_uppercase,
+        'lower': string.ascii_lowercase,
+        'alphanum': string.ascii_letters + string.digits,
+        'uppernumeric': string.ascii_uppercase + string.digits
+    }
+
+    chars = charsets.get(charset, string.ascii_uppercase)
+    codes = []
+
+    for _ in range(count):
+        random_part = ''.join(random.choices(chars, k=length))
+        code = f"{prefix}{random_part}{suffix}"
+        codes.append(code)
+
+    return codes
+```
+
+#### CLI Integration:
+
+**main.py test command additions:**
+```python
+test_parser.add_argument('--random', '-r', type=int, metavar='COUNT',
+                        help='Generate COUNT random codes to test')
+test_parser.add_argument('--random-length', type=int, default=6,
+                        help='Length of random portion (default: 6)')
+test_parser.add_argument('--random-charset', choices=['upper', 'lower', 'alphanum', 'uppernumeric'],
+                        default='uppernumeric',
+                        help='Character set (default: uppernumeric A-Z,0-9)')
+test_parser.add_argument('--random-prefix', default='',
+                        help='Prefix for random codes (e.g., DARK)')
+test_parser.add_argument('--random-suffix', default='',
+                        help='Suffix for random codes (e.g., 2025)')
+```
+
+**cmd_test() modification:**
+```python
+def cmd_test(args):
+    # ... existing code ...
+
+    if args.random:
+        codes = generate_random_codes(
+            count=args.random,
+            length=args.random_length,
+            charset=args.random_charset,
+            prefix=args.random_prefix,
+            suffix=args.random_suffix
+        )
+        print(f"[*] Testing {len(codes)} random codes ({args.random_charset}, length={args.random_length})")
+        if args.random_prefix or args.random_suffix:
+            print(f"[*] Pattern: {args.random_prefix}{'X'*args.random_length}{args.random_suffix}")
+```
+
+#### Usage Examples:
+
+```bash
+# Generate 100 random 6-character codes (A-Z,0-9)
+python3 main.py test --random 100
+
+# Random codes with DARK prefix (like DARKABCD12)
+python3 main.py test --random 50 --random-prefix DARK --random-length 6
+
+# Random codes with FREE suffix (like KK3DFREE)
+python3 main.py test --random 50 --random-suffix FREE --random-length 4
+
+# Full random uppercase only (like KKBDXZ)
+python3 main.py test --random 100 --random-charset upper --random-length 6
+
+# Mixed case alphanumeric (like Kk8Bd3)
+python3 main.py test --random 100 --random-charset alphanum --random-length 6
+
+# Combo: prefix + random + suffix (like DARK38YL2025)
+python3 main.py test --random 200 --random-prefix DARK --random-suffix 2025 --random-length 4
+```
+
+#### Smart Mode Integration:
+
+**Add to src/wordlist.py:**
+```python
+def get_smart_random_patterns(base_patterns, variations=10):
+    """
+    Generate random variations of successful patterns
+
+    If you found KATKA works but expired, try:
+    - KATKA + random 2 digits: KATKA01, KATKA99
+    - K + random 4 chars: KBDXZ, KPPQR
+    - Random 2 + ATKA: 38ATKA, 99ATKA
+    """
+    smart_codes = []
+
+    for pattern in base_patterns:
+        # Add numeric suffixes
+        for i in range(variations):
+            smart_codes.append(f"{pattern}{random.randint(10,99)}")
+
+        # Take first letter + random
+        if len(pattern) > 0:
+            first = pattern[0]
+            for _ in range(variations):
+                random_part = ''.join(random.choices(string.ascii_uppercase, k=4))
+                smart_codes.append(f"{first}{random_part}")
+
+    return smart_codes
+```
+
+#### Testing:
+```bash
+# Verify generation works
+python3 -c "from src.wordlist import generate_random_codes; print(generate_random_codes(5, 6, 'uppernumeric', prefix='DARK'))"
+
+# Should output something like:
+# ['DARKAB12CD', 'DARK99ZZQQ', 'DARKPP88MM', ...]
+```
+
+---
+
+## Feature 3: Multi-threading Support
 
 ### Requirements
 - Replace single-threaded loop with ThreadPoolExecutor or asyncio
@@ -177,10 +332,7 @@ python3 main.py test --priority --threads 10
 
 ---
 
-## Feature 3: WAF Detection & Adaptive Throttling
-
-### Priority: HIGH
-### Estimated Effort: 5-7 hours
+## Feature 4: WAF Detection & Adaptive Throttling
 
 ### Requirements
 - Detect Cloudflare, Imperva, AWS WAF
@@ -295,10 +447,7 @@ def test_batch(self, codes, session, csrf_token):
 
 ---
 
-## Feature 4: Pretix Permission Enumeration
-
-### Priority: MEDIUM
-### Estimated Effort: 6-8 hours
+## Feature 5: Pretix Permission Enumeration
 
 ### Requirements
 - Read Pretix permission model docs
@@ -429,15 +578,6 @@ python3 main.py test --priority --threads 5
 5. **Documentation**: Update README.md with new CLI commands
 
 ---
-
-## Priority Order for Next Session
-
-1. ✅ **Multi-threading** (biggest performance win)
-2. ✅ **WAF Detection** (prevents bans, critical for usability)
-3. ✅ **Web Scraping** (makes tool more automated)
-4. ✅ **Pretix Enum** (expands tool scope beyond vouchers)
-
-**Estimated Total Time**: 18-25 hours for all features
 
 ---
 
