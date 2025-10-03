@@ -77,10 +77,12 @@ def cmd_test(args):
         return 1
 
     # Create tester
-    tester = VoucherTester(verbose=args.verbose)
+    tester = VoucherTester(verbose=args.verbose, threads=args.threads)
 
     # Test codes
     print(f"[*] Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    if args.threads > 1:
+        print(f"[*] Multi-threading enabled: {args.threads} threads")
     print()
 
     results = tester.test_batch(codes, session, manager.csrf_token)
@@ -225,6 +227,7 @@ Examples:
     test_parser.add_argument('--wordlist', '-w', help='Load codes from custom file')
     test_parser.add_argument('--code', '-c', help='Test a single voucher code')
     test_parser.add_argument('--output', '-o', default='results.json', help='Output file for results')
+    test_parser.add_argument('--threads', '-t', type=int, default=1, help='Number of threads (default: 1, safe: 5, aggressive: 10)')
 
     # stats command
     stats_parser = subparsers.add_parser('stats', help='Show wordlist statistics')
