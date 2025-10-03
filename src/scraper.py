@@ -33,10 +33,22 @@ class EventScraper:
             return None
 
     def extract_speakers(self, html):
-        """Extract speaker names from HTML"""
+        """Extract speaker names from HTML and plain text"""
         speakers = []
 
-        # Common patterns for speaker names
+        # Noise keywords to filter out (navigation, UI, generic terms)
+        noise_keywords = [
+            'menu', 'login', 'logout', 'register', 'tickets', 'schedule', 'speakers',
+            'sessions', 'filter', 'home', 'about', 'contact', 'twitter', 'telegram',
+            'discord', 'github', 'medium', 'youtube', 'linkedin', 'facebook',
+            'get tickets', 'buy now', 'learn more', 'read more', 'click here',
+            'newsletter', 'subscribe', 'follow us', 'join us', 'sign up',
+            'cookie policy', 'privacy policy', 'terms', 'conditions', 'previous years',
+            'organized by', 'sponsored by', 'partners', 'connect', 'get in touch',
+            'media partnerships', 'contact email', 'closing ceremony', 'opening ceremony'
+        ]
+
+        # Common patterns for speaker names in HTML
         patterns = [
             r'<h[1-6][^>]*class="[^"]*speaker[^"]*"[^>]*>([^<]+)</h[1-6]>',
             r'<div[^>]*class="[^"]*speaker[^"]*"[^>]*>([^<]+)</div>',
@@ -52,19 +64,33 @@ class EventScraper:
             matches = re.findall(pattern, html, re.IGNORECASE)
             for match in matches:
                 name = match.strip()
-                # Filter out noise (must look like a name)
-                if len(name) > 3 and len(name) < 50 and ' ' in name:
+                # Filter: must look like a name, not noise
+                if (len(name) > 3 and len(name) < 50 and ' ' in name and
+                    not any(keyword in name.lower() for keyword in noise_keywords)):
                     speakers.append(name)
 
-        # Also extract from plain text (for terminal-rendered schedules like Pretalx)
-        # Look for capitalized names in format "FirstName LastName" without HTML tags
+        # Extract from plain text (browser copy/paste, terminal schedules)
         # Strip ANSI codes first
         text_only = re.sub(r'\x1b\[[0-9;]*m', '', html)
-        name_pattern = r'\b([A-Z][a-z]{2,}\s+[A-Z][a-z]{2,})\b'
-        text_matches = re.findall(name_pattern, text_only)
-        for match in text_matches:
-            if len(match) > 5 and len(match) < 50:
-                speakers.append(match.strip())
+
+        # Look for standalone name lines (2-4 capitalized words max, short)
+        # This avoids matching talk titles which are usually longer
+        lines = text_only.split('\n')
+        # Particles that can be lowercase in names
+        name_particles = {'de', 'van', 'von', 'der', 'den', 'del', 'la', 'le', 'di', 'da'}
+
+        for line in lines:
+            line = line.strip()
+            # Must be 2-4 words, mostly capitalized, total length 8-40 chars
+            words = line.split()
+            if (2 <= len(words) <= 4 and
+                8 <= len(line) <= 40 and
+                not re.match(r'^\d{1,2}:\d{2}', line) and  # Not a timestamp
+                not any(keyword in line.lower() for keyword in noise_keywords)):
+                # Check if mostly capitalized (allows particles like "de", "van")
+                cap_words = [w for w in words if w and (w[0].isupper() or w.lower() in name_particles)]
+                if len(cap_words) >= len(words) - 1:  # Allow 1 non-cap word (particle)
+                    speakers.append(line)
 
         # Deduplicate
         speakers = list(set(speakers))
@@ -75,10 +101,22 @@ class EventScraper:
         return speakers
 
     def extract_talks(self, html):
-        """Extract talk/session titles from HTML"""
+        """Extract talk/session titles from HTML and plain text"""
         talks = []
 
-        # Common patterns for talk titles
+        # Noise to filter out (UI elements, navigation, generic text)
+        noise_keywords = [
+            'menu', 'login', 'logout', 'register', 'tickets', 'schedule', 'speakers',
+            'sessions', 'filter', 'home', 'about', 'contact', 'twitter', 'telegram',
+            'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+            'sustainable futures', 'core & evm', 'developer ecosystem', 'impact defi',
+            'societal challenges', 'root', 'flower', 'seed', 'workshop',
+            'min', 'opening ceremony', 'closing ceremony', 'fireside chat',
+            'get tickets', 'buy now', 'previous years', 'organized by', 'sponsored by',
+            'get in touch', 'contact email'
+        ]
+
+        # Common patterns for talk titles in HTML
         patterns = [
             r'<h[1-6][^>]*class="[^"]*title[^"]*"[^>]*>([^<]+)</h[1-6]>',
             r'<div[^>]*class="[^"]*session[^"]*title[^"]*"[^>]*>([^<]+)</div>',
@@ -91,17 +129,53 @@ class EventScraper:
             matches = re.findall(pattern, html, re.IGNORECASE)
             for match in matches:
                 title = match.strip()
-                # Filter: must be substantial text
-                if len(title) > 5 and len(title) < 200:
+                # Filter: substantial text, not noise
+                if (len(title) > 10 and len(title) < 200 and
+                    not any(keyword in title.lower() for keyword in noise_keywords) and
+                    not re.match(r'^\d{1,2}:\d{2}', title)):  # Not a timestamp
                     talks.append(title)
 
-        # Deduplicate
-        talks = list(set(talks))
+        # Extract from plain text - look for talk titles (longer phrases, not all caps)
+        text_only = re.sub(r'\x1b\[[0-9;]*m', '', html)
+        lines = text_only.split('\n')
+
+        # Track potential speaker names to exclude them from talks
+        name_particles = {'de', 'van', 'von', 'der', 'den', 'del', 'la', 'le', 'di', 'da'}
+        potential_speakers = set()
+        for line in lines:
+            line = line.strip()
+            words = line.split()
+            # If it looks like a name (2-4 mostly capitalized words, short), mark it
+            if 2 <= len(words) <= 4 and 8 <= len(line) <= 40:
+                cap_words = [w for w in words if w and (w[0].isupper() or w.lower() in name_particles)]
+                if len(cap_words) >= len(words) - 1:
+                    potential_speakers.add(line.lower())
+
+        for line in lines:
+            line = line.strip()
+            # Potential talk title: 15-150 chars, has multiple words, not all caps, not timestamps
+            # AND not a speaker name
+            if (15 <= len(line) <= 150 and
+                ' ' in line and
+                not line.isupper() and
+                not re.match(r'^\d{1,2}:\d{2}', line) and
+                line.lower() not in potential_speakers and
+                not any(keyword in line.lower() for keyword in noise_keywords)):
+                talks.append(line)
+
+        # Deduplicate and clean
+        unique_talks = []
+        seen = set()
+        for talk in talks:
+            clean = ' '.join(talk.split())  # Normalize whitespace
+            if clean and clean.lower() not in seen:
+                seen.add(clean.lower())
+                unique_talks.append(clean)
 
         if self.verbose:
-            print(f"[TALKS] Found {len(talks)} unique talk titles")
+            print(f"[TALKS] Found {len(unique_talks)} unique talk titles")
 
-        return talks
+        return unique_talks
 
     def extract_sponsors(self, html):
         """Extract sponsor names from HTML"""
